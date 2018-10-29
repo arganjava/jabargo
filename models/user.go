@@ -5,6 +5,9 @@ import (
 	"gopkg.in/mgo.v2"
 	"log"
 	"time"
+	"golang.org/x/crypto/bcrypt"
+
+	"errors"
 )
 
 const (
@@ -23,8 +26,6 @@ type User struct {
 	Channels  []ChannelUser `json:"channels" form:"channels" bson:"channels"`
 	CreatedAt time.Time     `json:"createdAt" bson:"createdAt"`
 	UpdateAt  time.Time     `json:"updateAt" bson:"updateAt"`
-	CreatedBy time.Time     `json:"createdBy" bson:"createdBy"`
-	UpdateBy  time.Time     `json:"updateBy" bson:"updateBy"`
 }
 
 type ChannelUser struct {
@@ -56,38 +57,49 @@ func (user User) GET(mapParam *map[string]interface{}) (error, *[]User) {
 func (user User) POST() (error, *User) {
 	result := User{}
 	channel := Channel{}
+
 	err := channelCollection().Find(bson.M{"_id": bson.ObjectIdHex(DefaultChannel)}).One(&channel)
 	if err != nil {
-		log.Fatal(err)
+		log.Panicln(&err)
 		return err, nil;
 	}
 	pushToArray := bson.M{"$push": bson.M{"channels": bson.M{"_id": channel.Id, "name": channel.Name}}}
-	user.Id = bson.NewObjectId()
 	user.Channels = append(user.Channels, ChannelUser{channel.Id, channel.Name})
+	hash := Hash{}
+	hashResult, errHash := hash.Generate(user.Password)
+	if errHash != nil {
+		return errHash, nil;
+	}
+	user.Password = hashResult
 	err = userCollection().Insert(&user)
 	if err != nil {
-		log.Fatal(err)
 		return err, nil;
 	}
-	//err = userCollection().Update(bson.M{"_id": user.Id}, pushToArray)
 
 	err = userCollection().Find(bson.M{"_id": user.Id}).One(&result)
 	if err != nil {
-		log.Fatal(err)
 		return err, nil;
 	}
 	pushToArray = bson.M{"$push": bson.M{"users": bson.M{"_id": user.Id, "name": user.Name}}}
 	err = channelCollection().Update(bson.M{"_id": channel.Id}, pushToArray)
 	if err != nil {
-		log.Fatal(err)
 		return err, nil;
 	}
 	return nil, &result;
 }
 
-func (this User) PUT(user *User) *User {
+func (user User) Update() (error, *User) {
+	err := userCollection().Update(user.Id, &user)
+	if err != nil {
+		return err, nil;
+	}
+	err = userCollection().Find(bson.M{"_id": user.Id}).One(&user)
+	return err, &user;
+}
+
+func (user User) Delete() *User {
 	result := User{}
-	err := userCollection().Insert(&user)
+	err := userCollection().Remove(user.Id)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -95,12 +107,30 @@ func (this User) PUT(user *User) *User {
 	return &result;
 }
 
-func (this User) DELETE(user *User) *User {
-	result := User{}
-	err := userCollection().Insert(&user)
+func (user User) VerifyUser(email string) (error, *User) {
+	err := userCollection().Find(bson.M{"email": email}).One(&user)
 	if err != nil {
-		log.Fatal(err)
+		err = errors.New("not found user or password")
+		return err, nil;
 	}
-	err = userCollection().Find(bson.M{"name": "Ale"}).One(&result)
-	return &result;
+	return nil, &user;
+}
+
+type Hash struct{}
+
+func (c *Hash) Generate(input string) (string, error) {
+	saltedBytes := []byte(input)
+	hashedBytes, err := bcrypt.GenerateFromPassword(saltedBytes, bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+
+	hash := string(hashedBytes[:])
+	return hash, nil
+}
+
+func (c *Hash) Compare(hash string, s string) error {
+	incoming := []byte(s)
+	existing := []byte(hash)
+	return bcrypt.CompareHashAndPassword(existing, incoming)
 }

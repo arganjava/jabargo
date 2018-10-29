@@ -25,14 +25,15 @@ type Channel struct {
 	Chat      []Message     `json:"chat" form:"chats" bson:"chat"`
 	CreatedAt time.Time     `json:"createdAt" bson:"createdAt"`
 	UpdateAt  time.Time     `json:"updateAt" bson:"updateAt"`
-	CreatedBy time.Time     `json:"createdBy" bson:"createdBy"`
-	UpdateBy  time.Time     `json:"updateBy" bson:"updateBy"`
 }
 
 type UserChannel struct {
-	Id    bson.ObjectId `json:"_id" bson:"_id,omitempty"`
-	Name  string        `json:"name" form:"name" binding:"required" bson:"name"`
-	Email string        `json:"email" form:"email"  bson:"email"`
+	Id        bson.ObjectId `json:"_id" bson:"_id,omitempty"`
+	Name      string        `json:"name" form:"name" binding:"required" bson:"name"`
+	Email     string        `json:"email" form:"email"  bson:"email"`
+	Company   string        `json:"company" form:"company" bson:"company"`
+	Privilege string        `json:"privilege" form:"privilege" bson:"privilege"`
+	Phone     string        `json:"phone" form:"phone" bson:"phone"`
 }
 
 type Message struct {
